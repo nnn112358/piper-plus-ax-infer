@@ -42,17 +42,49 @@ uv run python scripts/run_tts_npu.py --axmodel-dir axmodel/ax620e  # LLM630
 
 NPU U16 出力は fp32 とほぼ同一のスペクトル構造を保ちます（STFT-magnitude cos ≈ **0.93**）。
 
-## モデル / chunk
+## モデル
+piper-plus-ax は NPUコンパイラ`に最適化したモデル構造に変更しています。
+VITS を 5つのonnxに分割します（`emb_lang` があるのが piper-plus 系の識別点）。
 
-piper-plus は VITS を 5 チャンクに分割します（`emb_lang` があるのが piper-plus 系の識別点）。
+| 項目 | piper-plus (fp16) | piper-plus-ax (npu_opt) |
+|------|---------------|---------------------|
+| 構成 | onnx1ファイル | onnx5分割（emb_lang/encp/dp/flow/decoder） |
+| 精度・形状 | FP16・動的 | FP32・固定（PH=256/T=512） |
+| 動的op・noise | グラフ内に内包 | 除去→CPU、noiseは外部入力化 |
+| NPU非対応op | グラフ内に内包  | 置換 |
+| decoder | MB-iSTFT | MS-iSTFT（Beep音対策） |
+| 実行先 | CPU/GPU  | LLM8850/LLM630 |
 
-| chunk | 役割 |
-|---|---|
-| `emb_lang` | 言語/話者埋め込み |
-| `enc_p`    | テキストエンコーダ |
-| `dp`       | duration predictor |
-| `flow`     | normalizing flow |
-| `decoder`  | MS-iSTFT vocoder |
+### NPU非対応op
+| NPU非対応op | 置換先  |
+|--------|------|
+| NonZero / GatherND / ScatterND | torch.where |
+| ScatterND | slice+concat |
+| GatherElements |  onehot×Mul×ReduceSum |
+| torch.cumsum  | Concat+Add累積 |
+| RandomNormalLike |  外部入力(z_p)化 |
+| Range / NonZero / ScatterND | CPU実装(align_cpu.py) |
+| Erf | GELU |
+
+###  MB-iSTFT /MS-iSTFT
+
+<img width="1446" height="704" alt="image" src="https://github.com/user-attachments/assets/212c908c-212b-4813-89f7-10cdbbd32216" />
+  MB-iSTFT（元） は、音声を4つの周波数サブバンドに分けて生成し、最後に
+  PQMF（固定の合成フィルタ） で1本に合成します。このフィルタは学習されない固定係
+  数で、サブバンド境界（44.1kHz/4分割だと 5512.5 / 8268.75 / 11025
+  Hz）に急峻な遷移を持ちます。
+
+  NPUでU16量子化すると：
+  - 各サブバンド信号に量子化誤差が乗る
+  - それが固定PQMFを通ると、サブバンド境界の特定周波数に誤差が集中・整列
+  - → その周波数に**定常的な寄生トーン（ピー音 / whine）**が発生
+  - 固定フィルタなので、誤差を吸収・分散できない
+
+  解決策＝MS-iSTFT
+  PQMF（固定合成）を、学習可能なconv（multistream_conv_post）に差し替え、量子化
+  を意識して再学習。
+  合成フィルタが学習で調整可能になるため、量子化誤差を境界に集中させず分散できる
+  - → ピー音が消滅、全NPU化が可能（cos ≈ 0.99999）
 
 ## クレジット / ライセンス
 - モデル（`axmodel/`）は piper-plus（MIT）由来。ただし**音声はつくよみちゃんコーパスの規約が優先**して適用されます。
