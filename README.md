@@ -1,8 +1,7 @@
 # piper-plus-ax
 
 
-![target](https://img.shields.io/badge/target-AX650N%20%2F%20AX620E-1f6feb)
-![quant](https://img.shields.io/badge/quant-U16%20full--NPU-f59e0b)
+
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 ![voice](https://img.shields.io/badge/voice-%E3%81%A4%E3%81%8F%E3%82%88%E3%81%BF%E3%81%A1%E3%82%83%E3%82%93-ff8fab)
 
