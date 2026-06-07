@@ -1,14 +1,12 @@
 # piper-plus-ax
 
-
-
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 ![voice](https://img.shields.io/badge/voice-%E3%81%A4%E3%81%8F%E3%82%88%E3%81%BF%E3%81%A1%E3%82%83%E3%82%93-ff8fab)
 
-`piper-plus`（MC-iSTFT）を `pulsar2` で `*.axmodel` に変換し、NPU 実行**できるようにしたデプロイセットです。
+`piper-plus`(decoder:MC-iSTFT）を `pulsar2` で `*.axmodel` に変換し、NPU 実行**できるようにしたデプロイセットです。
 通常の piper-plus からNPUに最適化したモデル構成に変更し、つくよみちゃんコーパスでファインチューニング学習しています。
 
-- 対応: **M5Stack LLM8850** 、**LLM630　** 同梱（`axmodel/ax620e/`）。
+- 対応: **M5Stack LLM8850** 、**LLM630　** 。
 - alignment のみ CPU（VITS 共通の非 NN 処理）。dtype U16 / SR 22050 / hop 256。
 
 ## 構成
