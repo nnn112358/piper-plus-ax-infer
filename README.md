@@ -3,7 +3,7 @@
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 ![voice](https://img.shields.io/badge/voice-%E3%81%A4%E3%81%8F%E3%82%88%E3%81%BF%E3%81%A1%E3%82%83%E3%82%93-ff8fab)
 
-`piper-plus`(decoder:MC-iSTFT）を NPUコンパイラ`pulsar2` で `*.axmodel` に変換し、NPU 実行**できるようにしたデプロイセットです。
+piper-plusを NPUボード LLM8850 / LLM630 実行 できるようにしたデプロイセットです。
 通常の piper-plus からNPUに最適化したモデル構成に変更し、つくよみちゃんコーパスでファインチューニング学習しています。
 
 - 対応: **M5Stack LLM8850** 、**LLM630** 。
