@@ -15,7 +15,6 @@ __pycache__/
 *.whl
 
 # サイズが大きい / 監査用ファイルは git に含めない (別途配布・ローカル保持)
-#   onnx/            : fp32 参照 ONNX (計 ~76MB)。run_tts_onnx.py 用・実機推論には不要
 #   model_conversion/: 変換設定 (FT / pulsar2)。再現・監査用で推論不要
-/onnx/
+#   (onnx/ は LFS で公開対象に変更済み)
 /model_conversion/
