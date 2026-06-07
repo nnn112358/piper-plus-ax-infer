@@ -7,7 +7,7 @@
 通常の piper-plus からNPUに最適化したモデル構成に変更し、つくよみちゃんコーパスでファインチューニング学習しています。
 
 - 対応: **M5Stack LLM8850** 、**LLM630　** 。
-- alignment のみ CPU（VITS 共通の非 NN 処理）。dtype U16 / SR 22050 / hop 256。
+- alignment のみ CPU（VITS 共通の非 NN 処理）。
 
 ## 構成
 
