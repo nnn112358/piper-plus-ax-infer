@@ -63,7 +63,7 @@ VITS を 5 つの ONNX に分割します（`emb_lang` があるのが piper-plu
 | `NonZero` / `GatherND` / `ScatterND` | `torch.where` |
 | `ScatterND` | slice + concat |
 | `GatherElements` | onehot × Mul × ReduceSum |
-| `torch.cumsum` | Concat + Add 累積 |
+| `torch.cumsum` | Concat + Add  |
 | `RandomNormalLike` | 外部入力（z_p）化 |
 | `Range` / `NonZero` / `ScatterND` | CPU 実装（`align_cpu.py`） |
 | `Erf` | GELU |
