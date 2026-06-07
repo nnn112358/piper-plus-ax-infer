@@ -1,0 +1,21 @@
+# uv / venv
+.venv/
+__pycache__/
+*.pyc
+
+# 推論スクリプトの生成出力 (bundle root に書き出される)
+/out_allnpu.wav
+/out_onnx_fp32.wav
+
+# 開発/実験成果物 — 公開セットには含めない
+#   requant/ : flow 再量子化実験 (pulsar2 ビルド成果物・calibration)。bundle 推論には不要。
+/requant/
+
+# pyaxengine 等の wheel は同梱しない (README: GitHub Releases から各自入手 / 依存は uv 管理)
+*.whl
+
+# サイズが大きい / 監査用ファイルは git に含めない (別途配布・ローカル保持)
+#   onnx/            : fp32 参照 ONNX (計 ~76MB)。run_tts_onnx.py 用・実機推論には不要
+#   model_conversion/: 変換設定 (FT / pulsar2)。再現・監査用で推論不要
+/onnx/
+/model_conversion/

@@ -1,0 +1,78 @@
+# piper-plus-ax
+
+> **piper-plus MS-iSTFT — AXera NPU 向け full-NPU 多言語 TTS デプロイセット**
+> 全5チャンクを U16 量子化で完全 NPU 化した VITS-TTS。話者「つくよみちゃん」。
+
+![target](https://img.shields.io/badge/target-AX650N%20%2F%20AX620E-1f6feb)
+![quant](https://img.shields.io/badge/quant-U16%20full--NPU-f59e0b)
+![license](https://img.shields.io/badge/license-MIT-lightgrey)
+![voice](https://img.shields.io/badge/voice-%E3%81%A4%E3%81%8F%E3%82%88%E3%81%BF%E3%81%A1%E3%82%83%E3%82%93-ff8fab)
+
+`piper-plus`（VITS + iSTFT）を AXera `pulsar2` で `*.axmodel` に変換し、**dp / flow を含む全チャンクを U16 で NPU 実行**できるようにしたデプロイセットです。通常の piper-plus は dp / flow が U16 で破綻して CPU 残置のハイブリッドになりますが、本セットは **multi-stream iSTFT + dilation 6 への適応ファインチューニング**でこれを解消し、全 NPU 化しています。
+
+- 対応: **M5Stack LLM8850（AX650N / NPU3）** 既定、**AX620E（NPU2）** 同梱（`axmodel/ax620e/`）。
+- alignment のみ CPU（VITS 共通の非 NN 処理）。dtype U16 / SR 22050 / hop 256。
+
+## 構成
+
+```
+piper-plus-ax/
+├── axmodel/{ax650,ax620e}/   全5 chunk U16 axmodel — これだけで実機推論可
+├── config/                   config.json + tokens.npz ("音声合成のテストです")
+├── ref_wav/                  out_allnpu.wav (NPU) / out_onnx_fp32.wav (fp32) / stft_npu_vs_fp32.png
+└── scripts/                  run_tts_npu.py / run_tts_onnx.py / plot_stft_eval.py / tts_pipeline.py / cpu_alignment.py
+```
+
+> fp32 参照 ONNX（`onnx/`）と変換設定（`model_conversion/`）はサイズの都合で**非同梱**です。
+
+## クイックスタート
+
+依存は `pyproject.toml` 管理。[`uv`](https://docs.astral.sh/uv/) が初回に `.venv` を自動構築します（bundle root から実行）。
+
+```bash
+# 全NPU 推論（実機。pyaxengine が必要）
+uv run --python <device-python> python scripts/run_tts_npu.py                              # AX650N / LLM8850（既定）
+uv run --python <device-python> python scripts/run_tts_npu.py --axmodel-dir axmodel/ax620e  # AX620E
+
+# STFT 評価図を再生成（同梱 wav から・NPU 不要）
+uv run python scripts/plot_stft_eval.py        # → ref_wav/stft_npu_vs_fp32.png
+```
+
+> NPU backend は **[pyaxengine](https://github.com/AXERA-TECH/pyaxengine)**（`import axengine`）。PyPI に無く、GitHub Releases の wheel かデバイスイメージ同梱の python を使う。
+> fp32 参照 `run_tts_onnx.py` を動かすには別途 `onnx/`（5本）が必要。
+
+## STFT 評価（量子化精度）
+
+同梱 tokens 発話「音声合成のテストです」の **全NPU U16 出力**（`out_allnpu.wav`）と **fp32 参照**（`out_onnx_fp32.wav`）のスペクトログラム比較。
+
+![STFT eval](ref_wav/stft_npu_vs_fp32.png)
+
+NPU U16 出力は fp32 とほぼ同一のスペクトル構造を保ちます（STFT-magnitude cos ≈ **0.93**）。
+
+> NPU と fp32 は alignment を独立に計算するため約1フレーム（hop 256）の時間差が生じ、サンプル単位の波形 cos は低めに出ます。スペクトル構造の一致が品質の指標です。
+
+## モデル / chunk
+
+piper-plus は VITS を 5 チャンクに分割します（`emb_lang` があるのが piper-plus 系の識別点）。
+
+| chunk | 役割 |
+|---|---|
+| `emb_lang` | 言語/話者埋め込み |
+| `enc_p`    | テキストエンコーダ |
+| `dp`       | duration predictor |
+| `flow`     | normalizing flow |
+| `decoder`  | MS-iSTFT vocoder |
+
+全チャンク U16 axmodel。decoder は MS-iSTFT（multi-stream）/ dilation 6（dilation を 12→6 に下げると AXera NPU の畳み込み制約を回避でき、dp / flow / decoder まで U16 化可能）。
+
+## クレジット / ライセンス
+
+- **音声: つくよみちゃんコーパス**（CV: 夢前黎 / つくよみちゃんプロジェクト）— 学習音声データ。<https://tyc.rei-yumesaki.net/material/corpus/>
+  > ⚠️ 合成音声・モデルの利用は **つくよみちゃんコーパスの利用規約**に従ってください（クレジット表記例:「つくよみちゃんコーパス（CV.夢前黎）」、禁止用途あり）。公開・配布・利用の前に必ず[公式の最新規約](https://tyc.rei-yumesaki.net/material/corpus/)を確認すること。
+- **piper-plus**（ayousanz）— VITS + iSTFT TTS（MIT）。<https://github.com/ayousanz/piper-plus>
+- **AXera pulsar2** — NPU コンパイラ（ONNX → axmodel 量子化/ビルド）。
+- **[pyaxengine](https://github.com/AXERA-TECH/pyaxengine)**（AXERA-TECH）— axmodel の Python 推論ランタイム。
+
+**ライセンス**
+- コード（`scripts/`）は **MIT** — © 2026 **nnn112358**（[LICENSE](LICENSE)）。
+- モデル（`axmodel/`）は piper-plus（MIT）由来。ただし**音声はつくよみちゃんコーパスの規約が優先**して適用されます。

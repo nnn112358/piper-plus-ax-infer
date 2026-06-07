@@ -1,0 +1,6 @@
+# Git LFS — モデル/バイナリ資産は LFS で管理 (公開リポジトリ向け)
+# git-lfs 未使用なら本ファイルを削除すれば通常の git 管理になる。
+*.axmodel  filter=lfs diff=lfs merge=lfs -text
+*.npz      filter=lfs diff=lfs merge=lfs -text
+*.wav      filter=lfs diff=lfs merge=lfs -text
+*.png      filter=lfs diff=lfs merge=lfs -text

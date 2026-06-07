@@ -1,0 +1,22 @@
+[project]
+name = "piper-plus-ax"
+version = "0.1.0"
+description = "piper-plus MS-iSTFT (npu_opt) full-NPU TTS for AX650N / LLM8850 — axmodel + fp32 onnx reference + eval"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "onnxruntime",   # scripts/run_tts_onnx.py (fp32 参照推論)
+    "matplotlib",    # scripts/plot_stft_eval.py (STFT 評価図)
+]
+
+# 実機 NPU 推論 (scripts/run_tts_npu.py) は axengine = pyaxengine が必要。
+#   pyaxengine: https://github.com/AXERA-TECH/pyaxengine ( import axengine )
+#   PyPI には無い → GitHub Releases の wheel (pip install axengine-*.whl) を入れるか、
+#   LLM8850 / AX650 デバイスイメージ同梱の python をそのまま使う。ここ (deps) には入れない。
+#   実行例: uv run --python <device-python> python scripts/run_tts_npu.py
+# host での fp32 参照 (run_tts_onnx.py) と評価図 (plot_stft_eval.py) は上記 deps だけで動く。
+
+[tool.uv]
+package = false   # この bundle 自体は配布パッケージにしない (scripts/ を直接実行する)
