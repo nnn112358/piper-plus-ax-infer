@@ -45,7 +45,7 @@ NPU U16 出力は fp32 とほぼ同一のスペクトル構造を保ちます（
 ## モデル
 
 piper-plus-ax は NPU コンパイラに最適化したモデル構造へ変更しています。
-VITS を 5 つの ONNX に分割します（`emb_lang` があるのが piper-plus 系の識別点）。
+VITS を 5 つの ONNX に分割します
 
 | 項目 | piper-plus (fp16) | piper-plus-ax (npu_opt) |
 |------|-------------------|-------------------------|
