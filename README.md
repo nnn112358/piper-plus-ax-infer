@@ -6,7 +6,7 @@
 `piper-plus`(decoder:MC-iSTFT）を `pulsar2` で `*.axmodel` に変換し、NPU 実行**できるようにしたデプロイセットです。
 通常の piper-plus からNPUに最適化したモデル構成に変更し、つくよみちゃんコーパスでファインチューニング学習しています。
 
-- 対応: **M5Stack LLM8850** 、**LLM630　** 。
+- 対応: **M5Stack LLM8850** 、**LLM630** 。
 - alignment のみ CPU（VITS 共通の非 NN 処理）。
 
 ## 構成
