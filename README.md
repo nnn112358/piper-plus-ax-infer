@@ -42,6 +42,22 @@ uv run python scripts/run_tts_npu.py --axmodel-dir axmodel/ax620e  # LLM630
 
 NPU U16 出力は fp32 とほぼ同一のスペクトル構造を保ちます（STFT-magnitude cos ≈ **0.93**）。
 
+### 最新検証（ep599, 2026-06-09）
+
+「こんにちは。つくよみちゃんです。」を AX620E NPU2 / AX650 NPU3 の axmodel で all-NPU 合成し（sim_axengine = pulsar2 cmodel backend）、fp32 ONNX と E2E 比較しました。
+
+| ターゲット | cos (vs FP32) | 8268.75 Hz Δ | 無音/beep |
+|---|---|---|---|
+| AX620E NPU2 U16 | **0.97922** | +1.6 dB | なし |
+| AX650 NPU3 U16  | **0.97909** | +1.6 dB | なし |
+
+- decoder 単体（実 z 入力, cmodel vs ONNX FP32）: AX620E cos **0.9998**
+- demo wav: `demo/tyc_ep599_ax620e.wav` / `demo/tyc_ep599_ax650.wav`
+
+<p align="center">
+  <img width="600" alt="ep599 STFT 3-way" src="demo/ep599_stft_3way.png" />
+</p>
+
 ## モデル
 
 piper-plus-ax は NPU コンパイラに最適化したモデル構造へ変更しています。
@@ -53,7 +69,8 @@ VITS を 5 つの ONNX に分割します
 | 精度・形状 | FP16・動的 | FP32・固定（PH=256 / T=512） |
 | 動的 op・noise | グラフ内に内包 | 除去 → CPU、noise は外部入力化 |
 | NPU 非対応 op | グラフ内に内包 | 置換 |
-| decoder | MB-iSTFT | MS-iSTFT（Beep 音対策） |
+| decoder | MB-iSTFT（polar head: Exp/Sin/Cos） | MS-iSTFT + **Cartesian head**（Beep 音対策 + AX620E 無音対策） |
+| resblock dilation | 最大 12 | **最大 6**（AX620E `conv_layer_check` 通過） |
 | 実行先 | CPU / GPU | LLM8850 / LLM630 |
 
 ### NPU 非対応 op
@@ -92,6 +109,18 @@ NPU で U16 量子化すると:
 PQMF（固定合成）を、学習可能な conv（`multistream_conv_post`）に差し替え、量子化を意識して再学習します。合成フィルタが学習で調整可能になるため、量子化誤差を境界に集中させず分散できます。
 
 - → ピー音が消滅し、全 NPU 化が可能（cos ≈ 0.99999）
+
+## AX620E 全 NPU 化レシピ（Cartesian head + dilation ≤ 8）
+
+AX620E NPU2 では MS-iSTFT だけだと別の故障モードが残ります。1 回の適応 FT で 3 点を同梱して解決します。
+
+| 変更 | 解決した故障 | 補足 |
+|---|---|---|
+| **Cartesian head**（real/imag を直接予測） | **無音**（cos −0.90）: NPU2 LUT が `exp` / `sin` / `cos` を破綻計算 | Exp/Sin/Cos = 0 個に。サイズ・速度・MACs 不変 |
+| **MS-iSTFT** | 8 kHz **beep**（PQMF + twiddle U16 量子化） | 上記の通り |
+| **resblock dilation ≤ 8（採用 6）** | AX620E `conv_layer_check` で build/run FAIL | dilation はゼロ詰めなので MACs・速度・サイズ不変 |
+
+これらは `piper-plus_FT` 側の `cartesian` フラグ + `ms_istft_vits` + `resblock_dilation_sizes` 末尾↓で表現されます（既存の polar / MB / dil12 経路は温存）。
 
 ## クレジット / ライセンス
 
