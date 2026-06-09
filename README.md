@@ -111,9 +111,8 @@ PQMF（固定合成）を、学習可能な conv（`multistream_conv_post`）に
 
 - → ピー音が消滅し、全 NPU 化が可能（cos ≈ 0.99999）
 
-## AX620E 全 NPU 化レシピ（Cartesian head + dilation ≤ 8）
-
-AX620E NPU2 では MS-iSTFT だけだと別の故障モードが残ります。1 回の適応 FT で 3 点を同梱して解決します。
+## Decoder:AX620E 向けの対応
+AX620E NPU2 では MS-iSTFT だけだと別の不具合が残ります。
 
 | 変更 | 解決した故障 | 補足 |
 |---|---|---|
