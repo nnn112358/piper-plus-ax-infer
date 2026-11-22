@@ -15,7 +15,7 @@
 - [ディレクトリ構成](#ディレクトリ構成)
 - [クイックスタート](#クイックスタート)
 - [評価](#評価)
-- [モデル](#モデル)
+- [モデル変換](#モデル変換)
 - [Decoder の変更](#decoder-の変更)
 - [クレジット / ライセンス](#クレジット--ライセンス)
 
@@ -103,19 +103,21 @@ NPU U16 出力のスペクトル構造は fp32 とほぼ同じです（STFT 振�
   <img width="600" alt="ep599 STFT 3-way" src="demo/ep599_stft_3way.png" />
 </p>
 
-## モデル
+## モデル変換
 
-NPU コンパイラ（Pulsar2）で扱えるよう、モデル構造を変えています。
+piper-plus のモデルを NPU コンパイラ（Pulsar2）で変換し、NPU で正しく動かすために行った変更のまとめです。
 
-| 項目 | piper-plus (fp16) | piper-plus-ax (npu_opt) |
-|------|-------------------|-------------------------|
-| 構成 | ONNX 1 ファイル | ONNX 5 分割（emb_lang / encp / dp / flow / decoder） |
-| 精度・形状 | FP16・動的 | FP32・固定（PH=256 / T=512） |
-| 動的 op・noise | グラフ内 | 動的 op は CPU へ、noise は外部入力 |
-| NPU 非対応 op | グラフ内 | 置換 |
-| decoder | MB-iSTFT（polar head: Exp/Sin/Cos） | MS-iSTFT + **Cartesian head** |
-| resblock dilation | 最大 12 | **最大 6** |
-| 実行先 | CPU / GPU | LLM8850 / LLM630 |
+| # | 課題 | 対策 | 変更箇所 |
+|---|---|---|---|
+| 1 | 1 ファイル・動的形状の ONNX は Pulsar2 でそのまま変換できない | 5 つの chunk に分け、入力形状を固定する | ONNX export: `emb_lang` / `encp` / `dp` / `flow` / `decoder`、FP32・PH=256 / T=512 |
+| 2 | NPU 非対応 op（`NonZero` / `GatherND` / `ScatterND` / `GatherElements` / `cumsum` / `Erf`）が含まれる | NPU で動く op の組み合わせに置き換える | 各 chunk のグラフ（[置換表](#npu-非対応-op-の置換)） |
+| 3 | alignment の動的処理（`Range` / `NonZero` / `ScatterND`）は NPU 化できない | CPU で実行する | `scripts/cpu_alignment.py` |
+| 4 | 乱数生成（`RandomNormalLike`）は NPU で実行できない | noise を外部入力（z_p）にする | chunk の入力、`scripts/tts_pipeline.py` |
+| 5 | MB-iSTFT の固定 PQMF により、U16 量子化で 8268.75 Hz 付近に **beep** が出る | PQMF を学習可能な conv に置き換え、再学習する（MS-iSTFT） | decoder: `ms_istft_vits`（`multistream_conv_post`） |
+| 6 | AX620E NPU2 で polar head の `exp` / `sin` / `cos` が LUT で破綻し、**無音**になる（cos −0.90） | real/imag を直接予測する Cartesian head にする | decoder head: `cartesian` フラグ |
+| 7 | resblock dilation 12 で AX620E の `conv_layer_check` が build / run FAIL | dilation を 8 以下（採用は 6）にする | decoder: `resblock_dilation_sizes` |
+
+5〜7 の詳細は [Decoder の変更](#decoder-の変更) を参照してください。
 
 ### NPU 非対応 op の置換
 
