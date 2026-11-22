@@ -150,7 +150,7 @@ piper-plus のモデルを NPU コンパイラ（Pulsar2）で変換し、NPU �
 | `flow` | `z_p` [1, 192, 512]、`y_mask` [1, 1, 512]、`g` → `z` [1, 192, 512] |
 | `decoder` | `z`、`g` → `audio` [1, 1, 131072] |
 
-**変更箇所**: ONNX export（`onnx/piper_plus_npu_opt_{emb_lang,encp,dp,flow,decoder}.onnx`）、`config/tokens.npz` の `max_ph` / `max_t`
+**変更箇所**: [`onnx/`](onnx)（[`emb_lang`](onnx/piper_plus_npu_opt_emb_lang.onnx) / [`encp`](onnx/piper_plus_npu_opt_encp.onnx) / [`dp`](onnx/piper_plus_npu_opt_dp.onnx) / [`flow`](onnx/piper_plus_npu_opt_flow.onnx) / [`decoder`](onnx/piper_plus_npu_opt_decoder.onnx)）、[`axmodel/`](axmodel)、[`config/tokens.npz`](config/tokens.npz) の `max_ph` / `max_t`
 
 <a id="fix-2"></a>
 
@@ -168,7 +168,7 @@ Pulsar2 が NPU で扱えない op を、同じ計算になる NPU 対応 op の
 
 alignment で使う `Range` / `NonZero` / `ScatterND` は置き換えずに CPU へ移しました（3）。`RandomNormalLike` はグラフから外しました（4）。
 
-**変更箇所**: 各 chunk の ONNX グラフ（モデル側の実装）
+**変更箇所**: [`onnx/`](onnx) の各 chunk のグラフ
 
 <a id="fix-3"></a>
 
@@ -181,7 +181,7 @@ alignment は、`dp` が予測した各音素の長さ（duration）から、音
 2. 有効フレーム数 `y_lengths = clamp(sum(w), 1, 512)` から `y_mask` [1, 1, 512] を作る
 3. `w` の累積和で各音素の開始・終了フレームを求め、`開始 ≤ t < 終了` の位置を 1 にして `attn` [1, 512, 256] を作る
 
-**変更箇所**: `scripts/cpu_alignment.py`（`make_alignment`）
+**変更箇所**: [`scripts/cpu_alignment.py`](scripts/cpu_alignment.py)（[`make_alignment`](scripts/cpu_alignment.py#L33)）
 
 <a id="fix-4"></a>
 
@@ -194,7 +194,7 @@ alignment は、`dp` が予測した各音素の長さ（duration）から、音
 z_p = (attn @ m_p) × y_mask      # m_p を音素単位からフレーム単位に展開
 ```
 
-**変更箇所**: `flow` chunk の入力（`z_p`）、`scripts/tts_pipeline.py`（`run_pipeline`）
+**変更箇所**: [`scripts/tts_pipeline.py`](scripts/tts_pipeline.py)（[`run_pipeline`](scripts/tts_pipeline.py#L174) の [`z_p` の計算と `flow` の入力](scripts/tts_pipeline.py#L223-L232)）、[`onnx/piper_plus_npu_opt_flow.onnx`](onnx/piper_plus_npu_opt_flow.onnx)
 
 <a id="fix-5"></a>
 
@@ -219,7 +219,7 @@ MS-iSTFT では、PQMF を学習可能な conv（`multistream_conv_post`）に�
 合成フィルタが学習で調整されるので、量子化誤差が境界に集まらずに分散します。
 これで beep が消え、全 chunk を NPU で実行できるようになりました（decoder 単体で cos ≈ 0.99999）。
 
-**変更箇所**: 学習側（`piper-plus_FT`）の `ms_istft_vits`（decoder の `multistream_conv_post`）
+**変更箇所**: [`onnx/piper_plus_npu_opt_decoder.onnx`](onnx/piper_plus_npu_opt_decoder.onnx)、[`axmodel/ax650/`](axmodel/ax650) / [`axmodel/ax620e/`](axmodel/ax620e) の decoder axmodel。学習側（`piper-plus_FT`、本リポジトリには含まれません）では `ms_istft_vits`（`multistream_conv_post`）
 
 <a id="fix-6"></a>
 
@@ -230,7 +230,7 @@ AX620E NPU2 では、これらの関数を近似する LUT が正しく計算で
 
 Cartesian head では real/imag を直接予測するので、Exp/Sin/Cos が 0 個になります。モデルのサイズ・速度・MACs は変わりません。
 
-**変更箇所**: 学習側（`piper-plus_FT`）の `cartesian` フラグ（decoder head）
+**変更箇所**: [`onnx/piper_plus_npu_opt_decoder.onnx`](onnx/piper_plus_npu_opt_decoder.onnx)、[`axmodel/ax650/`](axmodel/ax650) / [`axmodel/ax620e/`](axmodel/ax620e) の decoder axmodel。学習側（`piper-plus_FT`、本リポジトリには含まれません）では `cartesian` フラグ
 
 <a id="fix-7"></a>
 
@@ -240,7 +240,7 @@ Cartesian head では real/imag を直接予測するので、Exp/Sin/Cos が 0 
 dilation を 8 以下（採用は 6）に下げ、その構成で適応ファインチューニングしました。
 dilation はカーネルのゼロ詰めなので、MACs・速度・サイズは変わりません。
 
-**変更箇所**: 学習側（`piper-plus_FT`）の `resblock_dilation_sizes` の末尾の値
+**変更箇所**: [`onnx/piper_plus_npu_opt_decoder.onnx`](onnx/piper_plus_npu_opt_decoder.onnx)、[`axmodel/ax650/`](axmodel/ax650) / [`axmodel/ax620e/`](axmodel/ax620e) の decoder axmodel。学習側（`piper-plus_FT`、本リポジトリには含まれません）では `resblock_dilation_sizes` の末尾の値
 
 学習側では 5〜7 をフラグで切り替えられます。既存の polar / MB / dil12 の経路も残っています。
 
