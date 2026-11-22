@@ -29,9 +29,6 @@
   - [7. resblock dilation を 6 に下げる（AX620E の build 対策）](#fix-7)
   - [推論の流れ](#推論の流れ)
 - [クレジット / ライセンス](#クレジット--ライセンス)
-  - [Piper Plus つくよみちゃん](#piper-plus-つくよみちゃん)
-  - [ライセンス](#ライセンス)
-  - [使用しているソフトウェア・データ](#使用しているソフトウェアデータ)
 
 ## ディレクトリ構成
 
@@ -255,35 +252,16 @@ emb_lang → encp → dp →【CPU】alignment →【CPU】z_p → flow → deco
 
 ## クレジット / ライセンス
 
-### Piper Plus つくよみちゃん
+本リポジトリのモデルは「[Piper Plus つくよみちゃん](https://huggingface.co/ayousanz/piper-plus-tsukuyomi-chan)」を使用しています。
+学習音声は [つくよみちゃんコーパス](https://tyc.rei-yumesaki.net/material/corpus/)（CV.夢前黎、© Rei Yumesaki）です。
 
-本リポジトリは「[Piper Plus つくよみちゃん](https://huggingface.co/ayousanz/piper-plus-tsukuyomi-chan)」（開発: ようさん / [@ayousanz](https://x.com/ayousanz)）を使用しています。
-
-- 「Piper Plus つくよみちゃん」の開発には、フリー素材キャラクター「つくよみちゃん」（© Rei Yumesaki）が無料公開している音声データセット「[つくよみちゃんコーパス](https://tyc.rei-yumesaki.net/material/corpus/)（CV.夢前黎）」が使われています。
-- つくよみちゃん側から見ると非公式の作品です。夢前黎様は開発・サポートに携わっていません。本リポジトリについてのお問い合わせは、夢前黎様やようさんではなく、本リポジトリの [Issues](https://github.com/nnn112358/piper-plus-ax-infer/issues) へお願いします。
-
-**クレジット表記（必須）**: 生成した音声を動画・配信・講演などで公開するときは、説明欄など視聴者が確認できる場所に次のとおり記載してください。
+生成した音声を公開するときは、次のクレジットを記載してください。
 
 > ■Piper Plus:つくよみちゃん
 
-**禁止事項**: 出力した音声を次の目的で使用することを禁止します。
+出力した音声は、人への批判・攻撃、政治・宗教・思想の主張、ゾーニングのない刺激の強い表現、二次利用を許可する形での公開に使えません。
+詳しくは [Piper Plus つくよみちゃんのモデルカード](https://huggingface.co/ayousanz/piper-plus-tsukuyomi-chan) と [つくよみちゃんコーパスの利用規約](https://tyc.rei-yumesaki.net/material/corpus/) を確認してください。
+本リポジトリへのお問い合わせは [Issues](https://github.com/nnn112358/piper-plus-ax-infer/issues) へお願いします（夢前黎様・ようさんへの問い合わせはご遠慮ください）。
 
-- 人を批判・攻撃すること（定義は [つくよみちゃんキャラクターライセンス](https://tyc.rei-yumesaki.net/about/terms/#condition3) に準じます）。
-- 特定の政治的立場・宗教・思想への賛同または反対を呼びかけること。
-- 刺激の強い表現をゾーニングなしで公開すること。
-- 他者に対して二次利用を許可する形で公開すること（出力音声を素材として配布・販売する、出力音声で新たな音声合成ソフト類を作って他者に使わせるなど、つくよみちゃん（CV.夢前黎）の声質を他者が利用できるようにする行為全般を含みます）。
-
-鑑賞用の作品として配布・販売することは問題ありません。商用利用は個人・法人を問わず制限はありません。
-改変・再配布する場合は、つくよみちゃんコーパスの利用規約「[③声質を使用した音声合成ソフト等を公開する](https://tyc.rei-yumesaki.net/material/corpus/#terms3)」に従ってください。詳細は必ず [Piper Plus つくよみちゃんのモデルカード](https://huggingface.co/ayousanz/piper-plus-tsukuyomi-chan) と[公式規約](https://tyc.rei-yumesaki.net/material/corpus/)の最新版を確認してください。
-
-### ライセンス
-
-- `scripts/` のコードは MIT License です（[LICENSE](LICENSE)）。
-- モデル（`axmodel/`、`onnx/`）は piper-plus（MIT）由来です。ただし音声の利用には、上記のつくよみちゃんコーパスの規約が優先して適用されます。
-
-### 使用しているソフトウェア・データ
-
-- **つくよみちゃんコーパス**（CV: 夢前黎 / つくよみちゃんプロジェクト）— 学習音声データ。<https://tyc.rei-yumesaki.net/material/corpus/>
-- **[piper-plus](https://github.com/ayutaz/piper-plus)**（ayousanz）— VITS + iSTFT TTS（MIT）。
-- **AXera Pulsar2** — NPU コンパイラ。
-- **[pyaxengine](https://github.com/AXERA-TECH/pyaxengine)**（AXERA-TECH）— axmodel の Python 推論ランタイム。
+- コード（`scripts/`）: MIT License（[LICENSE](LICENSE)）
+- [piper-plus](https://github.com/ayutaz/piper-plus)（ayousanz, MIT）、AXera Pulsar2、[pyaxengine](https://github.com/AXERA-TECH/pyaxengine)（AXERA-TECH）を使用しています。
