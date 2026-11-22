@@ -3,7 +3,7 @@ MIT License
 Copyright (c) 2026 nnn112358
 
 This repository's code (scripts/) is released under the MIT License. The bundled
-models (axmodel/, onnx_ref/) are derived from piper-plus (https://github.com/ayousanz/piper-plus),
+models (axmodel/, onnx_ref/) are derived from piper-plus (https://github.com/ayutaz/piper-plus),
 which is also MIT-licensed. The training voice is the Tsukuyomi-chan Corpus
 (CV: Rei Yumesaki, https://tyc.rei-yumesaki.net/material/corpus/); use of the
 synthesized voice and model must follow that corpus's terms of use, which take

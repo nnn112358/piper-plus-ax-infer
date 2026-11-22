@@ -150,6 +150,6 @@ AX620E NPU2 では MS-iSTFT だけだと別の不具合が残ります。
 - モデル（`axmodel/`）は piper-plus（MIT）由来。ただし **音声はつくよみちゃんコーパスの規約が優先** して適用されます。
 - **音声: つくよみちゃんコーパス**（CV: 夢前黎 / つくよみちゃんプロジェクト）— 学習音声データ。<https://tyc.rei-yumesaki.net/material/corpus/>
   > ⚠️ 合成音声・モデルの利用は **つくよみちゃんコーパスの利用規約** に従ってください（生成音声のクレジット表記は上記「Piper Plus:つくよみちゃん」、禁止用途あり）。公開・配布・利用の前に、必ず [公式の最新規約](https://tyc.rei-yumesaki.net/material/corpus/) を確認してください。
-- **piper-plus**（ayousanz）— VITS + iSTFT TTS（MIT）。<https://github.com/ayousanz/piper-plus>
+- **piper-plus**（ayousanz）— VITS + iSTFT TTS（MIT）。<https://github.com/ayutaz/piper-plus>
 - **AXera pulsar2** — NPU コンパイラ。
 - **[pyaxengine](https://github.com/AXERA-TECH/pyaxengine)**（AXERA-TECH）— axmodel の Python 推論ランタイム。
