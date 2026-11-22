@@ -109,13 +109,15 @@ piper-plus のモデルを NPU コンパイラ（Pulsar2）で変換し、NPU �
 
 | # | 課題 | 対策 |
 |---|---|---|
-| 1 | 1 ファイル・動的形状の ONNX は Pulsar2 でそのまま変換できない | 5 chunk に分割し、形状を固定する |
-| 2 | NPU 非対応 op が含まれる | NPU で動く op の組み合わせに置き換える |
-| 3 | alignment は出力長が入力で変わり、NPU 化できない | CPU で実行する |
-| 4 | 乱数生成（`RandomNormalLike`）を NPU で実行できない | 乱数をグラフから外し、`z_p` を CPU で作る |
-| 5 | MB-iSTFT を U16 量子化すると 8268.75 Hz 付近に **beep** が出る | PQMF を学習可能な conv に置き換える（MS-iSTFT） |
-| 6 | AX620E NPU2 で `exp` / `sin` / `cos` が破綻し、**無音**になる | real/imag を直接予測する Cartesian head にする |
-| 7 | AX620E の `conv_layer_check` で build / run が FAIL | resblock dilation を 6 に下げる |
+| 1 | 1 ファイル・動的形状の ONNX は Pulsar2 でそのまま変換できない | [5 chunk に分割し、形状を固定する](#fix-1) |
+| 2 | NPU 非対応 op が含まれる | [NPU で動く op の組み合わせに置き換える](#fix-2) |
+| 3 | alignment は出力長が入力で変わり、NPU 化できない | [CPU で実行する](#fix-3) |
+| 4 | 乱数生成（`RandomNormalLike`）を NPU で実行できない | [乱数をグラフから外し、`z_p` を CPU で作る](#fix-4) |
+| 5 | MB-iSTFT を U16 量子化すると 8268.75 Hz 付近に **beep** が出る | [PQMF を学習可能な conv に置き換える（MS-iSTFT）](#fix-5) |
+| 6 | AX620E NPU2 で `exp` / `sin` / `cos` が破綻し、**無音**になる | [real/imag を直接予測する Cartesian head にする](#fix-6) |
+| 7 | AX620E の `conv_layer_check` で build / run が FAIL | [resblock dilation を 6 に下げる](#fix-7) |
+
+<a id="fix-1"></a>
 
 ### 1. 5 chunk に分割し、形状を固定する
 
@@ -135,6 +137,8 @@ piper-plus のモデルを NPU コンパイラ（Pulsar2）で変換し、NPU �
 
 **変更箇所**: ONNX export（`onnx/piper_plus_npu_opt_{emb_lang,encp,dp,flow,decoder}.onnx`）、`config/tokens.npz` の `max_ph` / `max_t`
 
+<a id="fix-2"></a>
+
 ### 2. NPU 非対応 op を置き換える
 
 Pulsar2 が NPU で扱えない op を、同じ計算になる NPU 対応 op の組み合わせで書き直しました。
@@ -151,6 +155,8 @@ alignment で使う `Range` / `NonZero` / `ScatterND` は置き換えずに CPU 
 
 **変更箇所**: 各 chunk の ONNX グラフ（モデル側の実装）
 
+<a id="fix-3"></a>
+
 ### 3. alignment を CPU で実行する
 
 alignment は、`dp` が予測した各音素の長さ（duration）から、音素とフレームの対応表 `attn` を作る処理です。出力の長さが入力によって変わるため、NPU では実行できません。
@@ -162,6 +168,8 @@ alignment は、`dp` が予測した各音素の長さ（duration）から、音
 
 **変更箇所**: `scripts/cpu_alignment.py`（`make_alignment`）
 
+<a id="fix-4"></a>
+
 ### 4. 乱数を外し、`z_p` を CPU で作る
 
 元のモデルは、グラフ内の `RandomNormalLike` で noise を生成しています。NPU では乱数生成を実行できないため、これをグラフから外しました。
@@ -172,6 +180,8 @@ z_p = (attn @ m_p) × y_mask      # m_p を音素単位からフレーム単位�
 ```
 
 **変更箇所**: `flow` chunk の入力（`z_p`）、`scripts/tts_pipeline.py`（`run_pipeline`）
+
+<a id="fix-5"></a>
 
 ### 5. PQMF を学習可能な conv に置き換える（MS-iSTFT）
 
@@ -196,6 +206,8 @@ MS-iSTFT では、PQMF を学習可能な conv（`multistream_conv_post`）に�
 
 **変更箇所**: 学習側（`piper-plus_FT`）の `ms_istft_vits`（decoder の `multistream_conv_post`）
 
+<a id="fix-6"></a>
+
 ### 6. Cartesian head にする（AX620E の無音対策）
 
 元の decoder は、iSTFT に渡すスペクトルを振幅と位相で予測し（polar head）、`exp` / `sin` / `cos` で real/imag に変換します。
@@ -204,6 +216,8 @@ AX620E NPU2 では、これらの関数を近似する LUT が正しく計算で
 Cartesian head では real/imag を直接予測するので、Exp/Sin/Cos が 0 個になります。モデルのサイズ・速度・MACs は変わりません。
 
 **変更箇所**: 学習側（`piper-plus_FT`）の `cartesian` フラグ（decoder head）
+
+<a id="fix-7"></a>
 
 ### 7. resblock dilation を 6 に下げる（AX620E の build 対策）
 
