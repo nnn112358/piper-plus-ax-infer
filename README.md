@@ -16,7 +16,6 @@
 - [クイックスタート](#クイックスタート)
 - [評価](#評価)
 - [モデル変換](#モデル変換)
-- [Decoder の変更](#decoder-の変更)
 - [クレジット / ライセンス](#クレジット--ライセンス)
 
 ## ディレクトリ構成
@@ -106,42 +105,39 @@ NPU U16 出力のスペクトル構造は fp32 とほぼ同じです（STFT 振�
 ## モデル変換
 
 piper-plus のモデルを NPU コンパイラ（Pulsar2）で変換し、NPU で正しく動かすために行った変更のまとめです。
+各対策の詳しい内容と変更箇所は、表の下の記事に書いています。
 
-| # | 課題 | 対策 | 変更箇所 |
-|---|---|---|---|
-| 1 | 1 ファイル・動的形状の ONNX は Pulsar2 でそのまま変換できない | VITS を 5 chunk に分け、すべての入出力を固定形状（音素 256 / フレーム 512）にする。不足分は padding し、有効範囲は mask で示す。各 chunk は FP32 ONNX で書き出し、Pulsar2 で U16 量子化する | ONNX export（`emb_lang` / `encp` / `dp` / `flow` / `decoder`） |
-| 2 | NPU 非対応 op（`NonZero` / `GatherND` / `ScatterND` / `GatherElements` / `cumsum` / `Erf`）が含まれる | 同じ計算を NPU で動く op の組み合わせで書き直す（例: `GatherElements` → onehot × Mul × ReduceSum、`Erf` → GELU） | 各 chunk のグラフ（[置換表](#npu-非対応-op-の置換)） |
-| 3 | alignment（duration から音素とフレームの対応を作る処理）は出力長がデータで変わり、NPU 化できない | `dp` と `flow` の間で切り、CPU の numpy で実行する。NN ではない決定的な処理で、CPU の FP32 で計算するため量子化誤差は入らない | `scripts/cpu_alignment.py` |
-| 4 | 乱数生成（`RandomNormalLike`）は NPU で実行できない | 乱数をグラフから外し、`flow` の入力 `z_p` を CPU で作って渡す。既定は noise なし（`z_p = attn @ m_p × y_mask`） | `flow` の入力、`scripts/tts_pipeline.py` |
-| 5 | MB-iSTFT の固定 PQMF により、U16 量子化で 8268.75 Hz 付近に **beep** が出る | PQMF（固定係数）を学習可能な conv に置き換え（MS-iSTFT）、量子化を考慮して再学習する。合成フィルタが誤差を分散できるようになる | decoder: `ms_istft_vits`（`multistream_conv_post`） |
-| 6 | AX620E NPU2 で polar head の `exp` / `sin` / `cos` が LUT で破綻し、**無音**になる（cos −0.90） | 振幅・位相ではなく real/imag を直接予測する Cartesian head にし、Exp/Sin/Cos を 0 個にする。サイズ・速度・MACs は変わらない | decoder head: `cartesian` フラグ |
-| 7 | resblock dilation 12 で AX620E の `conv_layer_check` が build / run FAIL | dilation を 8 以下（採用は 6）に下げ、その構成で適応ファインチューニングする。dilation はゼロ詰めなので MACs・速度・サイズは変わらない | decoder: `resblock_dilation_sizes` |
+| # | 課題 | 対策 |
+|---|---|---|
+| 1 | 1 ファイル・動的形状の ONNX は Pulsar2 でそのまま変換できない | 5 chunk に分割し、形状を固定する |
+| 2 | NPU 非対応 op が含まれる | NPU で動く op の組み合わせに置き換える |
+| 3 | alignment は出力長が入力で変わり、NPU 化できない | CPU で実行する |
+| 4 | 乱数生成（`RandomNormalLike`）を NPU で実行できない | 乱数をグラフから外し、`z_p` を CPU で作る |
+| 5 | MB-iSTFT を U16 量子化すると 8268.75 Hz 付近に **beep** が出る | PQMF を学習可能な conv に置き換える（MS-iSTFT） |
+| 6 | AX620E NPU2 で `exp` / `sin` / `cos` が破綻し、**無音**になる | real/imag を直接予測する Cartesian head にする |
+| 7 | AX620E の `conv_layer_check` で build / run が FAIL | resblock dilation を 6 に下げる |
 
-5〜7 の詳細は [Decoder の変更](#decoder-の変更) を参照してください。
+### 1. 5 chunk に分割し、形状を固定する
 
-### 推論の流れ（chunk と CPU 処理）
+元の piper-plus は VITS 全体が 1 つの ONNX で、入力長に応じて形状が変わります。これを次の 5 つの chunk に分け、すべての入出力を固定形状にしました。
 
-1〜4 の結果、推論は次の順に進みます。NPU で動くのは 5 つの chunk で、CPU で動くのは alignment と `z_p` の計算だけです。
+- 音素数は 256、フレーム数は 512 に固定します。足りない部分は padding し、有効な範囲は `x_mask` / `y_mask` で示します。
+- 各 chunk は FP32 の ONNX で書き出し、Pulsar2 で U16 量子化した axmodel に変換します。
+- 固定形状のため、1 回に合成できるのは最大 256 音素・512 フレーム（hop 256 で 131072 サンプル、22.05 kHz で約 5.9 秒）です。`decoder` の出力は、有効フレーム数 `y_lengths` × 256 サンプルで切り出します。
 
-| 順 | 処理 | 実行先 | 入力 → 出力（形状） |
-|---|---|---|---|
-| 1 | `emb_lang` | NPU | `lid` → 言語埋め込み `g` [1, 512, 1] |
-| 2 | `encp` | NPU | 音素 `x` [1, 256]、`x_lengths`、`g` → `x_hidden` / `m_p` / `logs_p` [1, 192, 256]、`x_mask` [1, 1, 256] |
-| 3 | `dp` | NPU | `x_hidden`、`x_mask`、`g`、`prosody_features` [1, 256, 3]、`lid` → `logw` [1, 1, 256] |
-| 4 | alignment | CPU | `logw`、`x_mask` → `attn` [1, 512, 256]、`y_mask` [1, 1, 512] |
-| 5 | `z_p` の計算 | CPU | `z_p = (attn @ m_p) × y_mask` → [1, 192, 512] |
-| 6 | `flow` | NPU | `z_p`、`y_mask`、`g` → `z` [1, 192, 512] |
-| 7 | `decoder` | NPU | `z × y_mask`、`g` → `audio` [1, 1, 131072] |
+| chunk | 入力 → 出力（形状） |
+|---|---|
+| `emb_lang` | `lid` → 言語埋め込み `g` [1, 512, 1] |
+| `encp` | 音素 `x` [1, 256]、`x_lengths`、`g` → `x_hidden` / `m_p` / `logs_p` [1, 192, 256]、`x_mask` [1, 1, 256] |
+| `dp` | `x_hidden`、`x_mask`、`g`、`prosody_features` [1, 256, 3]、`lid` → `logw` [1, 1, 256] |
+| `flow` | `z_p` [1, 192, 512]、`y_mask` [1, 1, 512]、`g` → `z` [1, 192, 512] |
+| `decoder` | `z`、`g` → `audio` [1, 1, 131072] |
 
-alignment（4）の中身は次のとおりです。
+**変更箇所**: ONNX export（`onnx/piper_plus_npu_opt_{emb_lang,encp,dp,flow,decoder}.onnx`）、`config/tokens.npz` の `max_ph` / `max_t`
 
-1. duration を求める: `w = ceil(exp(logw) × x_mask × length_scale)`
-2. 有効フレーム数 `y_lengths = clamp(sum(w), 1, 512)` から `y_mask` を作る
-3. `w` の累積和で各音素の開始・終了フレームを求め、`開始 ≤ t < 終了` を満たす位置を 1 にして `attn` を作る
+### 2. NPU 非対応 op を置き換える
 
-固定形状のため、1 回に合成できる長さは最大 256 音素・512 フレーム（hop 256 で 131072 サンプル、22.05 kHz で約 5.9 秒）です。`decoder` の出力は `y_lengths × 256` サンプルで切り出します。
-
-### NPU 非対応 op の置換
+Pulsar2 が NPU で扱えない op を、同じ計算になる NPU 対応 op の組み合わせで書き直しました。
 
 | NPU 非対応 op | 置換先 |
 |---|---|
@@ -149,13 +145,35 @@ alignment（4）の中身は次のとおりです。
 | `ScatterND` | slice + concat |
 | `GatherElements` | onehot × Mul × ReduceSum |
 | `torch.cumsum` | Concat + Add |
-| `RandomNormalLike` | 外部入力（z_p） |
-| `Range` / `NonZero` / `ScatterND`（alignment） | CPU 実装（`scripts/cpu_alignment.py`） |
 | `Erf` | GELU |
 
-## Decoder の変更
+alignment で使う `Range` / `NonZero` / `ScatterND` は置き換えずに CPU へ移しました（3）。`RandomNormalLike` はグラフから外しました（4）。
 
-### MB-iSTFT の beep と MS-iSTFT
+**変更箇所**: 各 chunk の ONNX グラフ（モデル側の実装）
+
+### 3. alignment を CPU で実行する
+
+alignment は、`dp` が予測した各音素の長さ（duration）から、音素とフレームの対応表 `attn` を作る処理です。出力の長さが入力によって変わるため、NPU では実行できません。
+そこで `dp` と `flow` の間でグラフを切り、CPU の numpy で計算します。NN ではない決定的な処理で、FP32 のまま計算するため量子化誤差は入りません。
+
+1. duration を求める: `w = ceil(exp(logw) × x_mask × length_scale)`
+2. 有効フレーム数 `y_lengths = clamp(sum(w), 1, 512)` から `y_mask` [1, 1, 512] を作る
+3. `w` の累積和で各音素の開始・終了フレームを求め、`開始 ≤ t < 終了` の位置を 1 にして `attn` [1, 512, 256] を作る
+
+**変更箇所**: `scripts/cpu_alignment.py`（`make_alignment`）
+
+### 4. 乱数を外し、`z_p` を CPU で作る
+
+元のモデルは、グラフ内の `RandomNormalLike` で noise を生成しています。NPU では乱数生成を実行できないため、これをグラフから外しました。
+`flow` の入力 `z_p` は、alignment の結果を使って CPU で計算します。既定は noise なしです。
+
+```
+z_p = (attn @ m_p) × y_mask      # m_p を音素単位からフレーム単位に展開
+```
+
+**変更箇所**: `flow` chunk の入力（`z_p`）、`scripts/tts_pipeline.py`（`run_pipeline`）
+
+### 5. PQMF を学習可能な conv に置き換える（MS-iSTFT）
 
 <p align="center">
   <img width="640" alt="MB-iSTFT と MS-iSTFT の構成比較" src="https://github.com/user-attachments/assets/212c908c-212b-4813-89f7-10cdbbd32216" />
@@ -164,7 +182,7 @@ alignment（4）の中身は次のとおりです。
 元の MB-iSTFT は、音声を 4 つの周波数サブバンドに分けて生成し、最後に PQMF（学習しない固定係数の合成フィルタ）で 1 本にまとめます。
 Pulsar2 で U16 量子化すると、次の流れで beep が出ます。
 
-1. 各サブバンド信号に量子化誤差が乗る。
+1. 各サブバンド信号に量子化誤差が乗る（PQMF と iSTFT の twiddle の U16 量子化）。
 2. 固定の PQMF を通ると、誤差がサブバンド境界の周波数に集まる（22.05 kHz を 4 分割すると 2756.25 / 5512.5 / 8268.75 Hz）。
 3. その周波数に定常的な寄生トーン（ピー音 / whine）が出る。固定フィルタなので、誤差を吸収・分散できない。
 
@@ -176,17 +194,35 @@ MS-iSTFT では、PQMF を学習可能な conv（`multistream_conv_post`）に�
 合成フィルタが学習で調整されるので、量子化誤差が境界に集まらずに分散します。
 これで beep が消え、全 chunk を NPU で実行できるようになりました（decoder 単体で cos ≈ 0.99999）。
 
-### AX620E 向けの対応
+**変更箇所**: 学習側（`piper-plus_FT`）の `ms_istft_vits`（decoder の `multistream_conv_post`）
 
-AX620E NPU2 では、MS-iSTFT だけでは別の不具合が残るため、次の変更も入れています。
+### 6. Cartesian head にする（AX620E の無音対策）
 
-| 変更 | 解決した不具合 | 補足 |
-|---|---|---|
-| **Cartesian head**（real/imag を直接予測） | **無音**（cos −0.90）。NPU2 の LUT が `exp` / `sin` / `cos` を正しく計算できない | Exp/Sin/Cos が 0 個になる。サイズ・速度・MACs は変わらない |
-| **MS-iSTFT** | 8 kHz 付近の **beep**（PQMF と twiddle の U16 量子化） | 前節のとおり |
-| **resblock dilation ≤ 8（採用は 6）** | AX620E の `conv_layer_check` で build / run が FAIL | dilation はゼロ詰めなので、MACs・速度・サイズは変わらない |
+元の decoder は、iSTFT に渡すスペクトルを振幅と位相で予測し（polar head）、`exp` / `sin` / `cos` で real/imag に変換します。
+AX620E NPU2 では、これらの関数を近似する LUT が正しく計算できず、出力が**無音**になります（cos −0.90）。
 
-学習側（`piper-plus_FT`）では、これらを `cartesian` フラグ、`ms_istft_vits`、`resblock_dilation_sizes` の末尾の値で指定します。既存の polar / MB / dil12 の経路も残っています。
+Cartesian head では real/imag を直接予測するので、Exp/Sin/Cos が 0 個になります。モデルのサイズ・速度・MACs は変わりません。
+
+**変更箇所**: 学習側（`piper-plus_FT`）の `cartesian` フラグ（decoder head）
+
+### 7. resblock dilation を 6 に下げる（AX620E の build 対策）
+
+元の decoder は resblock の dilation が最大 12 で、AX620E の `conv_layer_check` を通らず build / run が FAIL します。
+dilation を 8 以下（採用は 6）に下げ、その構成で適応ファインチューニングしました。
+dilation はカーネルのゼロ詰めなので、MACs・速度・サイズは変わりません。
+
+**変更箇所**: 学習側（`piper-plus_FT`）の `resblock_dilation_sizes` の末尾の値
+
+学習側では 5〜7 をフラグで切り替えられます。既存の polar / MB / dil12 の経路も残っています。
+
+### 推論の流れ
+
+1〜7 の結果、推論は次の順に進みます。NPU で動くのは 5 つの chunk で、CPU で動くのは alignment と `z_p` の計算だけです。
+
+```
+emb_lang → encp → dp →【CPU】alignment →【CPU】z_p → flow → decoder → audio
+  (NPU)    (NPU)  (NPU)                                (NPU)   (NPU)
+```
 
 ## クレジット / ライセンス
 
