@@ -124,9 +124,32 @@ AX620E NPU2 では MS-iSTFT だけだと別の不具合が残ります。
 
 ## クレジット / ライセンス
 
+### Piper Plus つくよみちゃん
+
+本リポジトリは「[Piper Plus つくよみちゃん](https://huggingface.co/ayousanz/piper-plus-tsukuyomi-chan)」（開発: ようさん / [@ayousanz](https://x.com/ayousanz)）を使用しています。
+
+- 「Piper Plus つくよみちゃん」の開発には、フリー素材キャラクター「つくよみちゃん」（© Rei Yumesaki）が無料公開している音声データセット「[つくよみちゃんコーパス](https://tyc.rei-yumesaki.net/material/corpus/)（CV.夢前黎）」が使われています。
+- つくよみちゃん側から見ると非公式の作品です。夢前黎様は開発・サポートに携わっていません。本リポジトリについてのお問い合わせは、夢前黎様やようさんではなく、本リポジトリの [Issues](https://github.com/nnn112358/piper-plus-ax-infer/issues) へお願いします。
+
+**クレジット表記（必須）**: 生成した音声を動画・配信・講演などで公開するときは、説明欄など視聴者が確認できる場所に次のとおり記載してください。
+
+> ■Piper Plus:つくよみちゃん
+
+**禁止事項**: 出力した音声を次の目的で使用することを禁止します。
+
+- 人を批判・攻撃すること（定義は [つくよみちゃんキャラクターライセンス](https://tyc.rei-yumesaki.net/about/terms/#condition3) に準じます）。
+- 特定の政治的立場・宗教・思想への賛同または反対を呼びかけること。
+- 刺激の強い表現をゾーニングなしで公開すること。
+- 他者に対して二次利用を許可する形で公開すること（出力音声を素材として配布・販売する、出力音声で新たな音声合成ソフト類を作って他者に使わせるなど、つくよみちゃん（CV.夢前黎）の声質を他者が利用できるようにする行為全般を含みます）。
+
+鑑賞用の作品として配布・販売することは問題ありません。商用利用は個人・法人を問わず制限はありません。
+改変・再配布する場合は、つくよみちゃんコーパスの利用規約「[③声質を使用した音声合成ソフト等を公開する](https://tyc.rei-yumesaki.net/material/corpus/#terms3)」に従ってください。詳細は必ず [Piper Plus つくよみちゃんのモデルカード](https://huggingface.co/ayousanz/piper-plus-tsukuyomi-chan) と公式規約の最新版を確認してください。
+
+### その他
+
 - モデル（`axmodel/`）は piper-plus（MIT）由来。ただし **音声はつくよみちゃんコーパスの規約が優先** して適用されます。
 - **音声: つくよみちゃんコーパス**（CV: 夢前黎 / つくよみちゃんプロジェクト）— 学習音声データ。<https://tyc.rei-yumesaki.net/material/corpus/>
-  > ⚠️ 合成音声・モデルの利用は **つくよみちゃんコーパスの利用規約** に従ってください（クレジット表記例:「つくよみちゃんコーパス（CV. 夢前黎）」、禁止用途あり）。公開・配布・利用の前に、必ず [公式の最新規約](https://tyc.rei-yumesaki.net/material/corpus/) を確認してください。
+  > ⚠️ 合成音声・モデルの利用は **つくよみちゃんコーパスの利用規約** に従ってください（生成音声のクレジット表記は上記「Piper Plus:つくよみちゃん」、禁止用途あり）。公開・配布・利用の前に、必ず [公式の最新規約](https://tyc.rei-yumesaki.net/material/corpus/) を確認してください。
 - **piper-plus**（ayousanz）— VITS + iSTFT TTS（MIT）。<https://github.com/ayousanz/piper-plus>
 - **AXera pulsar2** — NPU コンパイラ。
 - **[pyaxengine](https://github.com/AXERA-TECH/pyaxengine)**（AXERA-TECH）— axmodel の Python 推論ランタイム。
