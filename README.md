@@ -150,7 +150,7 @@ Pulsar2 で U16 量子化すると、次の流れで beep が出ます。
 
 MS-iSTFT では、PQMF を学習可能な conv（`multistream_conv_post`）に置き換え、量子化を考慮して再学習します。
 合成フィルタが学習で調整されるので、量子化誤差が境界に集まらずに分散します。
-これで beep が消え、全 chunk を NPU で実行できるようになりました（cos ≈ 0.99999）。
+これで beep が消え、全 chunk を NPU で実行できるようになりました（decoder 単体で cos ≈ 0.99999）。
 
 ### AX620E 向けの対応
 
